@@ -9,6 +9,8 @@ from backend.app.graph.queries import (
     FIND_SENSITIVE_RESOURCE_PATHS_QUERY,
     GET_IAM_ROLE_QUERY,
     FIND_EXCESSIVE_PERMISSION_PATHS_QUERY,
+    GET_WORKLOAD_QUERY,
+    FIND_WORKLOAD_BLAST_RADIUS_QUERY,
 )
 
 logger = logging.getLogger(__name__)
@@ -37,7 +39,7 @@ def _format_paths(
         for edge in row[1]:
             edge_data = dict(edge)
 
-            # Normalise nested properties for API compatibility.
+            # Normalise nested relationship properties.
             edge_data["properties"] = dict(
                 edge_data.get("properties") or {}
             )
@@ -59,7 +61,7 @@ def _format_paths(
             ],
         }
 
-        # Some investigation queries return additional findings.
+        # Preserve any additional evidence returned by the query.
         if len(row) > 2 and row[2] is not None:
             evidence_item["additional_evidence"] = dict(row[2])
 
@@ -76,11 +78,10 @@ def _investigate_paths(
     unknown_status: str,
 ) -> dict[str, Any]:
     """
-    Execute a predefined investigation query for an entity.
+    Execute a predefined investigation for a graph entity.
 
-    The entity is checked before paths are retrieved, allowing
-    unknown entities to be distinguished from entities without
-    qualifying paths.
+    First verifies that the entity exists, then searches for
+    qualifying paths and formats the results.
     """
 
     if not isinstance(entity_id, str) or not entity_id.strip():
@@ -112,7 +113,7 @@ def _investigate_paths(
                     "error": None,
                 }
 
-            # Step 2: Retrieve actual graph paths.
+            # Step 2: Find qualifying graph paths.
             query_result = graph.ro_query(
                 path_query,
                 {parameter_name: entity_id},
@@ -127,7 +128,7 @@ def _investigate_paths(
                     "error": None,
                 }
 
-            # Step 3: Convert database results into plain data.
+            # Step 3: Format paths and evidence.
             paths, evidence = _format_paths(query_result)
 
             return {
@@ -154,6 +155,10 @@ def _investigate_paths(
         }
 
 
+# ============================================================
+# SCENARIO 1: IDENTITY INVESTIGATION
+# ============================================================
+
 def find_sensitive_resource_paths(
     identity_id: str,
 ) -> dict[str, Any]:
@@ -172,12 +177,15 @@ def find_sensitive_resource_paths(
     )
 
 
+# ============================================================
+# SCENARIO 2: EXCESSIVE IAM PERMISSIONS
+# ============================================================
+
 def find_excessive_permission_paths(
     role_id: str,
 ) -> dict[str, Any]:
     """
-    Find paths from an IAM role to critical assets through
-    permissions explicitly classified as excessive.
+    Find paths through permissions classified as excessive.
 
     Scenario 2: Excessive IAM permissions.
     """
@@ -188,4 +196,30 @@ def find_excessive_permission_paths(
         existence_query=GET_IAM_ROLE_QUERY,
         path_query=FIND_EXCESSIVE_PERMISSION_PATHS_QUERY,
         unknown_status="unknown_role",
+    )
+
+
+# ============================================================
+# SCENARIO 3: EXPOSED WORKLOAD AND BLAST RADIUS
+# ============================================================
+
+def find_workload_blast_radius(
+    workload_id: str,
+) -> dict[str, Any]:
+    """
+    Find represented paths from a publicly exposed workload
+    to reachable critical data assets.
+
+    Scenario 3: Exposed workload and potential blast radius.
+
+    This identifies graph-represented reachability. It does not
+    prove that the workload has been compromised or exploited.
+    """
+
+    return _investigate_paths(
+        entity_id=workload_id,
+        parameter_name="workload_id",
+        existence_query=GET_WORKLOAD_QUERY,
+        path_query=FIND_WORKLOAD_BLAST_RADIUS_QUERY,
+        unknown_status="unknown_workload",
     )

@@ -7,10 +7,15 @@ def seed_blastshield_graph(graph) -> None:
     """
     Create the synthetic cloud environment for BlastShield.
 
-    Scenarios:
-    1. Suspicious identity with a potential path to critical data.
-    2. Excessive IAM permissions creating a potential path
-       to a critical data asset.
+    Scenario 1:
+        Suspicious identity with a potential path to critical data.
+
+    Scenario 2:
+        Excessive IAM permissions creating a potential path
+        to a critical data asset.
+
+    Scenario 3:
+        Exposed workload with access to multiple sensitive assets.
 
     MERGE is used to avoid duplicating matching nodes and
     relationships when the seeding function runs repeatedly.
@@ -23,7 +28,9 @@ def seed_blastshield_graph(graph) -> None:
     # ---------------------------------------------------------
 
     graph.query("""
-        // Scenario 1: Suspicious-login investigation entities.
+        // =====================================================
+        // SCENARIO 1: IDENTITY INVESTIGATION
+        // =====================================================
 
         MERGE (i:Identity {id: 'developer_07'})
         SET i.name = 'Developer 07',
@@ -47,12 +54,38 @@ def seed_blastshield_graph(graph) -> None:
         SET d.name = 'Customer Database',
             d.sensitivity = 'critical'
 
-        // Scenario 2: Excessively privileged analytics role.
+        // =====================================================
+        // SCENARIO 2: EXCESSIVE IAM PERMISSIONS
+        // =====================================================
 
         MERGE (ar:IAMRole {id: 'analytics-role'})
         SET ar.name = 'Analytics Role',
             ar.privilege_level = 'LOW',
             ar.intended_scope = 'ANALYTICS'
+
+        // =====================================================
+        // SCENARIO 3: EXPOSED WORKLOAD
+        // =====================================================
+
+        MERGE (api:Workload {id: 'exposed-api-01'})
+        SET api.name = 'Exposed API Service',
+            api.status = 'RUNNING',
+            api.environment = 'PRODUCTION',
+            api.exposure = 'PUBLIC',
+            api.criticality = 'HIGH'
+
+        MERGE (api_role:IAMRole {id: 'api-service-role'})
+        SET api_role.name = 'API Service Role',
+            api_role.privilege_level = 'MEDIUM',
+            api_role.intended_scope = 'API_SERVICE'
+
+        MERGE (payments:DataAsset {id: 'payments-db'})
+        SET payments.name = 'Payments Database',
+            payments.sensitivity = 'critical'
+
+        MERGE (config:DataAsset {id: 'config-store'})
+        SET config.name = 'Configuration Store',
+            config.sensitivity = 'critical'
     """)
 
     # ---------------------------------------------------------
@@ -68,7 +101,12 @@ def seed_blastshield_graph(graph) -> None:
         MATCH (d:DataAsset {id: 'customer-db'})
         MATCH (ar:IAMRole {id: 'analytics-role'})
 
-        // Scenario 1: Existing identity-to-data access path.
+        MATCH (api:Workload {id: 'exposed-api-01'})
+        MATCH (api_role:IAMRole {id: 'api-service-role'})
+        MATCH (payments:DataAsset {id: 'payments-db'})
+        MATCH (config:DataAsset {id: 'config-store'})
+
+        // Scenario 1: Identity-to-data access path.
 
         MERGE (i)-[:HAS_SESSION]->(s)
         MERGE (s)-[:CAN_ACCESS]->(w)
@@ -83,6 +121,13 @@ def seed_blastshield_graph(graph) -> None:
             permission.reason =
                 'Analytics role can assume a production role '
                 + 'outside its intended scope'
+
+        // Scenario 3: Exposed workload and its reachable assets.
+
+        MERGE (api)-[:RUNS_AS]->(api_role)
+        MERGE (api_role)-[:CAN_READ]->(d)
+        MERGE (api_role)-[:CAN_READ]->(payments)
+        MERGE (api_role)-[:CAN_READ]->(config)
     """)
 
     print("BlastShield graph seeding complete.")

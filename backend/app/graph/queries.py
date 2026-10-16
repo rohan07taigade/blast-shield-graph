@@ -2,7 +2,7 @@
 
 
 # ============================================================
-# SCENARIO 1: SUSPICIOUS LOGIN / IDENTITY INVESTIGATION
+# SCENARIO 1: IDENTITY INVESTIGATION
 # ============================================================
 
 GET_IDENTITY_QUERY = """
@@ -86,4 +86,56 @@ RETURN
     ] AS edges,
 
     properties(permission) AS excessive_permission
+"""
+
+
+# ============================================================
+# SCENARIO 3: EXPOSED WORKLOAD AND BLAST RADIUS
+# ============================================================
+
+GET_WORKLOAD_QUERY = """
+MATCH (w:Workload {id: $workload_id})
+RETURN w.id AS id
+LIMIT 1
+"""
+
+
+FIND_WORKLOAD_BLAST_RADIUS_QUERY = """
+MATCH p =
+    (w:Workload {
+        id: $workload_id,
+        status: 'RUNNING',
+        exposure: 'PUBLIC'
+    })
+    -[:RUNS_AS]->
+    (r:IAMRole)
+    -[:CAN_READ]->
+    (d:DataAsset {sensitivity: 'critical'})
+
+RETURN
+    [
+        node IN nodes(p) |
+        {
+            id: node.id,
+            label: labels(node)[0]
+        }
+    ] AS nodes,
+
+    [
+        rel IN relationships(p) |
+        {
+            source: startNode(rel).id,
+            target: endNode(rel).id,
+            type: type(rel),
+            properties: properties(rel)
+        }
+    ] AS edges,
+
+    {
+        workload_exposure: w.exposure,
+        workload_status: w.status,
+        workload_criticality: w.criticality,
+        role_id: r.id,
+        asset_sensitivity: d.sensitivity
+    } AS evidence
 """
