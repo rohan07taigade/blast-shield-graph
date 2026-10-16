@@ -294,6 +294,12 @@
   color: #ffbdca;
 }
 
+.severity.unassessed {
+  color: #bfcede;
+  background: #202b39;
+  border-color: #46586d;
+}
+
 .findings>p {
   color: #aab9ce;
   font-size: 13px;
@@ -529,4 +535,19 @@
   border: 0;
   border-top: 1px solid #263348;
   margin: 18px 0;
+}
+
+.secondary-button {
+  margin-left: auto;
+  border: 1px solid #526b8a;
+  border-radius: 7px;
+  padding: 7px 10px;
+  color: #e7effc;
+  background: #19263a;
+  cursor: pointer;
+}
+
+.secondary-button:disabled {
+  opacity: 0.55;
+  cursor: wait;
 }

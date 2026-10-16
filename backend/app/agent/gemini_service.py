@@ -20,7 +20,7 @@ Base your findings only on the returned tool results.
 
 Clearly distinguish potential access from confirmed exploitation.
 Do not claim real-world containment has occurred.
-The current tools use synthetic mock data, not FalkorDB.
+The tools query a locally seeded synthetic FalkorDB graph, not a live cloud tenant.
 
 If the alert or identity is unknown, say so.
 If no qualifying path is returned, do not claim the environment
@@ -57,14 +57,14 @@ async def run_gemini_investigation(alert_id: str) -> str:
     prompt = f"""
 Investigate security alert {alert_id}.
 
-1. Call investigate_alert with this alert ID.
-2. If an identity is returned, investigate its potential paths
-   using find_sensitive_resource_paths.
-3. Use get_blast_radius to identify relevant workloads, roles,
-   and data assets.
-4. Summarise the findings using the actual tool results.
+1. Call investigate_alert with this alert ID. Its response is the canonical structured investigation.
+2. Call get_blast_radius with the same alert ID to summarize path-derived workloads, roles, and assets.
+3. For the containment scenario, call get_containment_route_statuses with the same alert ID.
+4. Summarise the findings using only the actual tool results and acknowledge their synthetic FalkorDB provenance.
 
 Do not invent missing relationships or permissions.
+Do not invent risk scores. If the service reports UNASSESSED, say no deterministic risk score is available.
+Do not attempt containment or claim a route was changed; the tools are read-only.
 """
 
     async with stdio_client(server_params) as (read, write):

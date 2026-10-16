@@ -12,6 +12,7 @@ import "@xyflow/react/dist/style.css";
 import "./App.css";
 
 const API = "http://127.0.0.1:8000";
+const EMPTY_PATHS = [];
 
 async function apiRequest(url, options = {}) {
   const response = await fetch(url, options);
@@ -40,18 +41,20 @@ export default function App() {
   const [agentAnswer, setAgentAnswer] = useState("");
   const [agentError, setAgentError] = useState("");
   const [agentLoading, setAgentLoading] = useState(false);
+  const [containment, setContainment] = useState(null);
+  const [containmentBusy, setContainmentBusy] = useState(false);
 
   useEffect(() => {
     let active = true;
 
     async function initialise() {
       try {
-        await apiRequest(`${API}/api/health`);
+        const health = await apiRequest(`${API}/api/health`);
         const result = await apiRequest(`${API}/api/alerts`);
 
         if (!active) return;
 
-        setApiOnline(true);
+        setApiOnline(health.status === "ok");
         setAlerts(result.items);
         setSelectedAlert(result.items[0] || null);
       } catch {
@@ -78,6 +81,7 @@ export default function App() {
 
     setInvestigating(true);
     setInvestigation(null);
+    setContainment(null);
     setAgentAnswer("");
     setAgentError("");
     setError("");
@@ -98,6 +102,13 @@ export default function App() {
       );
 
       setInvestigation(result);
+      if (selectedAlert.id === "BH-CONTAINMENT-4001") {
+        try {
+          setContainment(await apiRequest(`${API}/api/containment/${selectedAlert.id}`));
+        } catch (err) {
+          setContainment({ status: "query_error", error: err.message, routes: [] });
+        }
+      }
 
       // Then ask Gemini to investigate through MCP.
       setAgentLoading(true);
@@ -134,47 +145,31 @@ export default function App() {
   }
 
 
-  const path = investigation?.paths?.[0];
+  const paths = investigation?.paths ?? EMPTY_PATHS;
+  const path = paths[0];
 
   const nodes = useMemo(() => {
-    if (!path) return [];
-
-    return path.nodes.map((item, index) => ({
-      id: item.id,
-      position: {
-        x: index * 190,
-        y: index % 2 === 0 ? 45 : 155,
-      },
-      data: {
-        label: `${item.label}\n${item.type}`,
-      },
-      style: {
-        width: 155,
-        padding: 12,
-        whiteSpace: "pre-line",
-        textAlign: "center",
-        borderRadius: 10,
-        color: "#edf3ff",
-        background:
-          item.type === "DataAsset"
-            ? "#472332"
-            : item.type === "IAMRole"
-              ? "#202f4d"
-              : "#17313a",
-        border:
-          item.type === "DataAsset"
-            ? "1px solid #f18aa8"
-            : "1px solid #486681",
-        fontSize: 12,
-      },
+    const byId = new Map();
+    paths.forEach((currentPath, pathIndex) => currentPath.nodes.forEach((item, index) => {
+      if (!byId.has(item.id)) byId.set(item.id, {
+        id: item.id,
+        position: { x: index * 190, y: pathIndex * 150 + (index % 2 === 0 ? 35 : 100) },
+        data: { label: `${item.label}\n${item.type}` },
+        style: {
+          width: 155, padding: 12, whiteSpace: "pre-line", textAlign: "center",
+          borderRadius: 10, color: "#edf3ff",
+          background: item.type === "DataAsset" ? "#472332" : item.type === "IAMRole" ? "#202f4d" : "#17313a",
+          border: item.type === "DataAsset" ? "1px solid #f18aa8" : "1px solid #486681",
+          fontSize: 12,
+        },
+      });
     }));
-  }, [path]);
+    return [...byId.values()];
+  }, [paths]);
 
   const edges = useMemo(() => {
-    if (!path) return [];
-
-    return path.edges.map((edge, index) => ({
-      id: `edge-${index}`,
+    return paths.flatMap((currentPath, pathIndex) => currentPath.edges.map((edge, index) => ({
+      id: `edge-${pathIndex}-${index}`,
       source: edge.source,
       target: edge.target,
       label: edge.type,
@@ -194,13 +189,38 @@ export default function App() {
       labelBgStyle: {
         fill: "#101a2b",
       },
-    }));
-  }, [path]);
+    })));
+  }, [paths]);
 
   const riskScore = Math.max(
     0,
     Math.min(100, investigation?.risk_score ?? 0)
   );
+
+  async function simulateRoute(routeId) {
+    const approved = window.confirm(`Block the ${routeId} route in the synthetic graph? This does not change any live cloud session.`);
+    if (!approved) return;
+    setContainmentBusy(true);
+    try {
+      const result = await apiRequest(`${API}/api/containment/simulate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ alert_id: selectedAlert.id, route_id: routeId, confirmed: true }),
+      });
+      setContainment(result.verification);
+      setAgentAnswer("");
+      setAgentError("Graph state changed. Re-run the investigation to refresh Gemini's explanation.");
+      const refreshed = await apiRequest(`${API}/api/investigations`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ alert_id: selectedAlert.id }),
+      });
+      setInvestigation(refreshed);
+    } catch (err) {
+      setError(err.message || "Synthetic containment simulation failed.");
+    } finally {
+      setContainmentBusy(false);
+    }
+  }
 
   return (
     <div className="app-shell">
@@ -228,7 +248,7 @@ export default function App() {
             access paths to critical resources.
           </p>
         </div>
-        <span className="mock-label">MOCK DATA</span>
+        <span className="mock-label">SYNTHETIC FALKORDB DATA</span>
       </section>
 
       {error && <div className="error-banner">{error}</div>}
@@ -253,6 +273,7 @@ export default function App() {
                   setInvestigation(null);
                   setAgentAnswer("");
                   setAgentError("");
+                  setContainment(null);
                   setAgentLoading(false);
                   setError("");
                 }}
@@ -270,8 +291,7 @@ export default function App() {
           <div className="sidebar-note">
             <strong>Development mode</strong>
             <p>
-              Findings currently come from the mock service.
-              Live graph integration is a later step.
+              Findings are queried from a locally seeded synthetic FalkorDB graph, not a live cloud tenant.
             </p>
           </div>
         </aside>
@@ -310,7 +330,7 @@ export default function App() {
             <section className="panel empty-state">
               <h3>Retrieving investigation</h3>
               <p className="muted">
-                Requesting results from the mock backend...
+                Querying the synthetic FalkorDB graph...
               </p>
             </section>
           )}
@@ -322,9 +342,13 @@ export default function App() {
                   <div>
                     <p className="eyebrow">INVESTIGATION RESULT</p>
                     <h3>
-                      {investigation.outcome === "path_found"
+              {investigation.outcome === "path_found"
                         ? "Potential access path identified"
-                        : "No qualifying path in mock graph"}
+                        : investigation.outcome === "query_error"
+                          ? "Graph query failed"
+                          : investigation.outcome === "unknown_entity"
+                            ? "Investigation target not found"
+                            : "No qualifying path in represented graph"}
                     </h3>
                   </div>
 
@@ -338,16 +362,10 @@ export default function App() {
                 <p>{investigation.summary}</p>
 
                 <div className="risk-heading">
-                  <span>Illustrative risk score</span>
-                  <strong>{riskScore}/100</strong>
+                  <span>Deterministic risk score</span>
+                  <strong>{investigation.risk_score == null ? "Not assessed" : `${riskScore}/100`}</strong>
                 </div>
-
-                <div className="risk-track">
-                  <div
-                    className="risk-fill"
-                    style={{ width: `${riskScore}%` }}
-                  />
-                </div>
+                {investigation.risk_score != null && <div className="risk-track"><div className="risk-fill" style={{ width: `${riskScore}%` }} /></div>}
               </section>
 
 
@@ -358,7 +376,7 @@ export default function App() {
                     <h3>Gemini's explanation</h3>
                   </div>
 
-                  <span className="source-label">MCP · MOCK DATA</span>
+                  <span className="source-label">MCP · SYNTHETIC FALKORDB</span>
                 </div>
 
                 {agentLoading && (
@@ -391,7 +409,7 @@ export default function App() {
                 <div className="section-title">
                   <div>
                     <p className="eyebrow">GRAPH EVIDENCE</p>
-                    <h3>Represented access path</h3>
+                    <h3>Represented access paths ({paths.length})</h3>
                   </div>
                   <span className="source-label">
                     {investigation.data_source}
@@ -415,11 +433,9 @@ export default function App() {
                   </div>
                 ) : (
                   <div className="no-path">
-                    <h4>No qualifying path returned</h4>
+                    <h4>{investigation.outcome === "query_error" ? "Graph data unavailable" : investigation.outcome === "unknown_entity" ? "Target not found" : "No qualifying path returned"}</h4>
                     <p>
-                      This mock result has no qualifying path to
-                      critical data. That does not prove a real
-                      environment is safe.
+                      {investigation.outcome === "query_error" ? "The graph query failed; no reachability conclusion is available." : "No qualifying path was returned by this query. That does not prove a real environment is safe."}
                     </p>
                   </div>
                 )}
@@ -460,11 +476,29 @@ export default function App() {
                     ))
                   ) : (
                     <p className="muted">
-                      No response action was proposed by the mock service.
+                      No response action is supported for this investigation result.
                     </p>
                   )}
                 </section>
               </div>
+
+              {selectedAlert.id === "BH-CONTAINMENT-4001" && (
+                <section className="panel">
+                  <div className="section-title">
+                    <div><p className="eyebrow">SYNTHETIC SIMULATION</p><h3>Containment route verification</h3></div>
+                    <span className="source-label">NO LIVE CLOUD CHANGES</span>
+                  </div>
+                  <p className="muted">Each action requires confirmation and marks only a route in the seeded FalkorDB graph as BLOCKED.</p>
+                  {containment?.routes?.map((route) => (
+                    <div className="evidence-item" key={route.route_id}>
+                      <span>{route.containment_status === "BLOCKED" ? "✓" : "•"}</span>
+                      <p>{route.route_id}: {route.containment_status}</p>
+                      {route.containment_status !== "BLOCKED" && <button className="secondary-button" disabled={containmentBusy} onClick={() => simulateRoute(route.route_id)}>Simulate block</button>}
+                    </div>
+                  ))}
+                  {containment?.error && <p className="error-banner">{containment.error}</p>}
+                </section>
+              )}
 
               {investigation.warnings.length > 0 && (
                 <section className="warning-panel">

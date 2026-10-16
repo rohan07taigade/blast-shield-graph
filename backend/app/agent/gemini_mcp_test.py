@@ -3,7 +3,6 @@ import os
 import sys
 
 from google import genai
-from google.genai import types
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
@@ -33,15 +32,14 @@ async def main():
     Investigate alert BH-1042.
 
     Use investigate_alert to retrieve its context.
-    Then use find_sensitive_resource_paths and get_blast_radius
-    for developer_07.
+    Then use get_blast_radius with the same alert ID.
 
-    Explain whether a potential path to critical data is
-    represented in the results. List the relevant entities
-    and limitations.
+    Explain the represented paths, relevant entities, provenance,
+    and limitations. State that no risk score is available if the
+    service reports UNASSESSED.
 
     Base your explanation only on tool results. Identify the
-    information as mock data. Do not claim successful
+    information as synthetic FalkorDB data. Do not claim successful
     exploitation or real-world containment.
     """
 
@@ -56,7 +54,7 @@ async def main():
 
             async with genai.Client(api_key=api_key).aio as client:
                 response = await client.models.generate_content(
-                    model="gemini-3.5-flash-lite",
+                    model=os.getenv("GEMINI_MODEL", "gemini-flash-latest"),
                     contents=prompt,
                     config={
                         "tools": [session],

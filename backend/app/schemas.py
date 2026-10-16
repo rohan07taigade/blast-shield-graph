@@ -1,11 +1,16 @@
 
-from typing import Literal
+from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class InvestigationRequest(BaseModel):
     alert_id: str = Field(min_length=1, max_length=64)
+
+    @field_validator("alert_id", mode="before")
+    @classmethod
+    def trim_alert_id(cls, value):
+        return value.strip() if isinstance(value, str) else value
 
 
 class GraphNode(BaseModel):
@@ -18,6 +23,7 @@ class GraphEdge(BaseModel):
     source: str
     target: str
     type: str
+    properties: dict[str, Any] = Field(default_factory=dict)
 
 
 class GraphPath(BaseModel):
@@ -40,20 +46,25 @@ class ProposedAction(BaseModel):
 class InvestigationResponse(BaseModel):
     investigation_id: str
     alert_id: str
-    identity_id: str
+    target: dict[str, str]
+    identity_id: str | None = None
 
     outcome: Literal[
         "path_found",
         "no_path_in_graph",
+        "unknown_entity",
+        "invalid_input",
+        "query_error",
     ]
 
-    risk_score: int = Field(ge=0, le=100)
+    risk_score: int | None = Field(default=None, ge=0, le=100)
     severity: Literal[
         "LOW",
         "MEDIUM",
         "HIGH",
         "CRITICAL",
-    ]
+        "UNASSESSED",
+    ] = "UNASSESSED"
 
     summary: str
     paths: list[GraphPath]
@@ -62,4 +73,4 @@ class InvestigationResponse(BaseModel):
     warnings: list[str] = Field(default_factory=list)
 
     # Makes it clear that this result is synthetic.
-    data_source: Literal["mock"] = "mock"
+    data_source: Literal["synthetic_falkordb"] = "synthetic_falkordb"
