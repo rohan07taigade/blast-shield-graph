@@ -1,6 +1,6 @@
 """Seed the synthetic infrastructure graph for BlastShield."""
 
-from backend.app.graph.connection import graph_connection
+from app.graph.connection import graph_connection
 
 
 def seed_blastshield_graph(graph) -> None:

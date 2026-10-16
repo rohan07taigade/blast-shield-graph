@@ -1,6 +1,6 @@
 """Seed synthetic graph data for Scenario 4 containment verification."""
 
-from backend.app.graph.connection import graph_connection
+from app.graph.connection import graph_connection
 
 
 IDENTITY_ID = "containment-user-01"

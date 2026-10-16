@@ -3,8 +3,8 @@
 import logging
 from typing import Any
 
-from backend.app.graph.connection import graph_connection
-from backend.app.graph.queries import (
+from app.graph.connection import graph_connection
+from app.graph.queries import (
     GET_IDENTITY_QUERY,
     FIND_SENSITIVE_RESOURCE_PATHS_QUERY,
     GET_IAM_ROLE_QUERY,
