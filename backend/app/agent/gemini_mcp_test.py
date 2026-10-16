@@ -1,4 +1,3 @@
-
 import asyncio
 import os
 import sys
@@ -7,6 +6,12 @@ from google import genai
 from google.genai import types
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
+
+from pathlib import Path
+from dotenv import load_dotenv
+
+PROJECT_ROOT = Path(__file__).resolve().parents[3]
+load_dotenv(PROJECT_ROOT / ".env")
 
 
 async def main():
@@ -51,7 +56,7 @@ async def main():
 
             async with genai.Client(api_key=api_key).aio as client:
                 response = await client.models.generate_content(
-                    model="gemini-flash-latest",
+                    model="gemini-3.5-flash-lite",
                     contents=prompt,
                     config={
                         "tools": [session],

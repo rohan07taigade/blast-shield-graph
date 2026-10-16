@@ -92,7 +92,7 @@
   letter-spacing: -1px;
 }
 
-.page-heading > div > p:last-child {
+.page-heading>div>p:last-child {
   max-width: 600px;
 }
 
@@ -294,7 +294,7 @@
   color: #ffbdca;
 }
 
-.findings > p {
+.findings>p {
   color: #aab9ce;
   font-size: 13px;
   line-height: 1.8;
@@ -471,4 +471,62 @@
   .graph-canvas {
     height: 320px;
   }
+}
+
+.agent-panel {
+  margin-bottom: 17px;
+}
+
+.markdown-answer {
+  color: #c5d1e3;
+  font-size: 13px;
+  line-height: 1.8;
+  overflow-wrap: anywhere;
+}
+
+.markdown-answer h1,
+.markdown-answer h2,
+.markdown-answer h3,
+.markdown-answer h4 {
+  color: #edf3ff;
+  margin: 18px 0 8px;
+}
+
+.markdown-answer h1 {
+  font-size: 19px;
+}
+
+.markdown-answer h2 {
+  font-size: 17px;
+}
+
+.markdown-answer h3 {
+  font-size: 15px;
+}
+
+.markdown-answer p,
+.markdown-answer ul,
+.markdown-answer ol {
+  margin: 10px 0;
+}
+
+.markdown-answer li {
+  margin: 5px 0;
+}
+
+.markdown-answer code {
+  padding: 2px 5px;
+  background: #202c40;
+  border-radius: 4px;
+  color: #a9c8ff;
+}
+
+.markdown-answer strong {
+  color: #edf3ff;
+}
+
+.markdown-answer hr {
+  border: 0;
+  border-top: 1px solid #263348;
+  margin: 18px 0;
 }

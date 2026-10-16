@@ -1,4 +1,5 @@
-
+import traceback
+from app.agent.gemini_service import run_gemini_investigation
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -50,6 +51,60 @@ def health():
 def list_alerts():
     return {"items": MOCK_ALERTS}
 
+
+# @app.post(
+#     "/api/investigations",
+#     response_model=InvestigationResponse,
+# )
+
+
+@app.post("/api/agent/investigate")
+async def investigate_with_agent(
+    request: InvestigationRequest,
+):
+    # Validate the alert against our current mock dataset
+    # before calling Gemini.
+    mock_result = get_mock_investigation(request.alert_id)
+
+    if mock_result is None:
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "outcome": "unknown_alert",
+                "message": "Alert not found in mock dataset.",
+            },
+        )
+
+    try:
+        answer = await run_gemini_investigation(
+            request.alert_id
+        )
+    except RuntimeError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail=str(exc),
+        ) from exc
+    except Exception as exc:
+        traceback.print_exception(
+            type(exc),
+            exc,
+            exc.__traceback__,
+        )
+
+        raise HTTPException(
+            status_code=502,
+            detail=(
+                "Gemini/MCP investigation failed: "
+                f"{type(exc).__name__}: {exc}"
+            ),
+        ) from exc
+
+    return {
+        "status": "completed",
+        "alert_id": request.alert_id,
+        "answer": answer,
+        "data_source": "mock",
+    }
 
 @app.post(
     "/api/investigations",

@@ -1,4 +1,4 @@
-
+import ReactMarkdown from "react-markdown";
 import { useEffect, useMemo, useState } from "react";
 import {
   ReactFlow,
@@ -37,6 +37,9 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [investigating, setInvestigating] = useState(false);
   const [error, setError] = useState("");
+  const [agentAnswer, setAgentAnswer] = useState("");
+  const [agentError, setAgentError] = useState("");
+  const [agentLoading, setAgentLoading] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -69,14 +72,18 @@ export default function App() {
     };
   }, []);
 
+
   async function investigate() {
     if (!selectedAlert) return;
 
     setInvestigating(true);
     setInvestigation(null);
+    setAgentAnswer("");
+    setAgentError("");
     setError("");
 
     try {
+      // First retrieve structured data for the graph UI.
       const result = await apiRequest(
         `${API}/api/investigations`,
         {
@@ -91,12 +98,41 @@ export default function App() {
       );
 
       setInvestigation(result);
+
+      // Then ask Gemini to investigate through MCP.
+      setAgentLoading(true);
+
+      try {
+        const agentResult = await apiRequest(
+          `${API}/api/agent/investigate`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              alert_id: selectedAlert.id,
+            }),
+          }
+        );
+
+        setAgentAnswer(agentResult.answer);
+      } catch (err) {
+        setAgentError(
+          err.message || "Gemini investigation failed."
+        );
+      } finally {
+        setAgentLoading(false);
+      }
     } catch (err) {
-      setError(err.message || "Investigation failed.");
+      setError(
+        err.message || "Could not retrieve the investigation."
+      );
     } finally {
       setInvestigating(false);
     }
   }
+
 
   const path = investigation?.paths?.[0];
 
@@ -210,12 +246,14 @@ export default function App() {
             alerts.map((alert) => (
               <button
                 key={alert.id}
-                className={`incident ${
-                  selectedAlert?.id === alert.id ? "selected" : ""
-                }`}
+                className={`incident ${selectedAlert?.id === alert.id ? "selected" : ""
+                  }`}
                 onClick={() => {
                   setSelectedAlert(alert);
                   setInvestigation(null);
+                  setAgentAnswer("");
+                  setAgentError("");
+                  setAgentLoading(false);
                   setError("");
                 }}
               >
@@ -311,6 +349,43 @@ export default function App() {
                   />
                 </div>
               </section>
+
+
+              <section className="panel agent-panel">
+                <div className="section-title">
+                  <div>
+                    <p className="eyebrow">AI INVESTIGATION</p>
+                    <h3>Gemini's explanation</h3>
+                  </div>
+
+                  <span className="source-label">MCP · MOCK DATA</span>
+                </div>
+
+                {agentLoading && (
+                  <p className="muted">
+                    Gemini is reviewing the investigation evidence...
+                  </p>
+                )}
+
+                {agentError && (
+                  <div className="error-banner">
+                    AI explanation unavailable: {agentError}
+                  </div>
+                )}
+
+                {!agentLoading && agentAnswer && (
+                  <div className="markdown-answer">
+                    <ReactMarkdown>{agentAnswer}</ReactMarkdown>
+                  </div>
+                )}
+
+                {!agentLoading && !agentAnswer && !agentError && (
+                  <p className="muted">
+                    Run an investigation to view the AI explanation.
+                  </p>
+                )}
+              </section>
+
 
               <section className="panel">
                 <div className="section-title">
